@@ -22,6 +22,7 @@ from project.types import Aggregation, Stock
 
 Stocks = List[Stock]
 
+
 @op(
     config_schema={"s3_key": str},
     required_resource_keys={"s3"},
@@ -37,6 +38,7 @@ def get_s3_data(context: OpExecutionContext) -> Stocks:
 
     return stocks
 
+
 @op(
     ins={"stocks": In(dagster_type=Stocks)},
     out={"Aggregation": Out(dagster_type=Aggregation)},
@@ -48,13 +50,15 @@ def process_data(stocks: Stocks) -> Aggregation:
     return aggregation
 
 
-@op(tags={"kind": "redis"},
-        ins={"aggregation": In(dagster_type=Aggregation)},
-        required_resource_keys={"redis"},
-        description="Upload aggregation to Redis.",
+@op(
+    tags={"kind": "redis"},
+    ins={"aggregation": In(dagster_type=Aggregation)},
+    required_resource_keys={"redis"},
+    description="Upload aggregation to Redis.",
 )
 def put_redis_data(context, aggregation: Aggregation) -> Nothing:
     context.resources.redis.put_date(str(aggregation.date), str(aggregation.high))
+
 
 @graph
 def week_3_pipeline():
@@ -88,7 +92,8 @@ docker = {
     "ops": {"get_s3_data": {"config": {"s3_key": "prefix/stock_9.csv"}}},
 }
 
-@static_partitioned_config(partition_keys=[str(num) for num in range(1,11)])
+
+@static_partitioned_config(partition_keys=[str(num) for num in range(1, 11)])
 def docker_config(partition_key: str) -> Dict:
     config = docker.copy()
     config["ops"]["get_s3_data"]["config"]["s3_key"] = f"prefix/stock_{partition_key}.csv"
@@ -111,13 +116,13 @@ docker_week_3_pipeline = week_3_pipeline.to_job(
         "s3": s3_resource,
         "redis": redis_resource,
     },
-    op_retry_policy=RetryPolicy(max_retries=10, delay=1)
+    op_retry_policy=RetryPolicy(max_retries=10, delay=1),
 )
 
 
-local_week_3_schedule = ScheduleDefinition(job=local_week_3_pipeline, cron_schedule="*/15 * * * *") 
+local_week_3_schedule = ScheduleDefinition(job=local_week_3_pipeline, cron_schedule="*/15 * * * *")
 
-docker_week_3_schedule = ScheduleDefinition(job=docker_week_3_pipeline, cron_schedule="0 * * * *") 
+docker_week_3_schedule = ScheduleDefinition(job=docker_week_3_pipeline, cron_schedule="0 * * * *")
 
 
 @sensor(job=docker_week_3_pipeline)
@@ -127,7 +132,7 @@ def docker_week_3_sensor(context: SensorEvaluationContext):
     if not new_files:
         yield SkipReason("No new s3 files found in bucket.")
         return
-    
+
     for new_file in new_files:
         config = docker.copy()
         config["ops"]["get_s3_data"]["config"]["s3_key"] = new_file
